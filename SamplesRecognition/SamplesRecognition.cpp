@@ -2,18 +2,19 @@
 //
 
 #include "pch.h"
-#include <iostream>
-#include <fstream>
-#include <string>
+#include "SamplesRecognition.h"
 
 using namespace std;
 
 int main()
 {
 	string filePath;
-	ifstream samplesFile;
 
-	int sampleWidth, sampleHeight;
+	int sampleWidth, sampleHeight, noisySamplesNumber;
+
+	double** noisySamples;
+
+	NeuralNetwork neuralNetwork;
 
 	try {
 		cout << "Input sample width: ";
@@ -30,21 +31,41 @@ int main()
 			throw "Error - Invalid parameter: sample height";
 		}
 
+		neuralNetwork.neuronsNumber = sampleWidth * sampleHeight;
+
+		cout << "Input training samples number (L <= " 
+			<< (int)(neuralNetwork.neuronsNumber / 4 / log(neuralNetwork.neuronsNumber))
+			<< "): ";
+		cin >> neuralNetwork.samplesNumber;
+
+		if (neuralNetwork.samplesNumber <= 0) {
+			throw "Error - Invalid parameter: training samples number";
+		}
+
 		cin.clear();
 		cin.ignore(cin.rdbuf()->in_avail());
 
-		cout << "Input file path: " << endl;
+		cout << "Input path of file with training samples: " << endl;
 		getline(cin, filePath, '\n');
 
-		samplesFile.open(filePath);
+		neuralNetwork.trainingSamples 
+			= readSampleFromFile(filePath, neuralNetwork.samplesNumber, neuralNetwork.neuronsNumber);
 
-		if (!samplesFile.is_open()) {
-			throw "Error - Failed to open: " + filePath;
+		cout << "Input noisy samples number: ";
+		cin >> noisySamplesNumber;
+
+		if (noisySamplesNumber <= 0) {
+			throw "Error - Invalid parameter: noisy samples number";
 		}
 
+		cin.clear();
+		cin.ignore(cin.rdbuf()->in_avail());
 
+		cout << "Input path of file with noisy samples: " << endl;
+		getline(cin, filePath, '\n');
 
-		samplesFile.close();
+		noisySamples 
+			= readSampleFromFile(filePath, noisySamplesNumber, neuralNetwork.neuronsNumber);
 	}
 	catch (const char* mesage) {
 		cerr << mesage << endl;
@@ -53,6 +74,205 @@ int main()
 		return 1;
 	}
 
+	cout << endl << "Recognizing samples: " << endl;
+
+	for (int currSampleNumber = 0; currSampleNumber < neuralNetwork.samplesNumber; currSampleNumber++) {
+		printSample(neuralNetwork.trainingSamples[currSampleNumber], sampleWidth, sampleHeight);
+	}
+
+	cout << "Noisy samples: " << endl;
+
+	for (int currSampleNumber = 0; currSampleNumber < noisySamplesNumber; currSampleNumber++) {
+		printSample(noisySamples[currSampleNumber], sampleWidth, sampleHeight);
+	}
+
+	trainNeuralNetwork(neuralNetwork);
+
+	cout << "Recognized samples: " << endl;
+
+	double* recognizedSample;
+	for (int currSampleNumber = 0; currSampleNumber < noisySamplesNumber; currSampleNumber++) {
+		recognizedSample = recognizeSample(neuralNetwork, noisySamples[currSampleNumber]);
+
+		printSample(recognizedSample, sampleWidth, sampleHeight);
+	}
+
 	system("pause");
 	return 0;
+}
+
+
+double** readSampleFromFile(string filePath, int samplesNumber, int neuronsNumber) {
+	double** samples = new double*[samplesNumber];
+	ifstream samplesFile;
+
+	samplesFile.open(filePath);
+
+	if (!samplesFile.is_open()) {
+		throw "Error - Failed to open: " + filePath;
+	}
+
+	for (int currSampleNumber = 0; currSampleNumber < samplesNumber; currSampleNumber++) {
+		samples[currSampleNumber] = new double[neuronsNumber];
+
+		for (int currSampleComponent = 0; currSampleComponent < neuronsNumber; currSampleComponent++) {
+			if (samplesFile.eof()) {
+				throw "Error - Reached end of file: " + filePath;
+			}
+
+			samplesFile >> samples[currSampleNumber][currSampleComponent];
+		}
+	}
+
+	samplesFile.close();
+
+	return samples;
+}
+
+
+void printSample(double* sample, int width, int height) {
+	int currComponent = 0;
+
+	printf("\n");
+
+	for (int i = 0; i < height; i++) {
+		for (int j = 0; j < width; j++) {
+			printf("%2d ", (int)sample[currComponent]);
+
+			currComponent++;
+		}
+
+		printf("\n");
+	}
+
+	printf("\n");
+}
+
+
+void trainNeuralNetwork(NeuralNetwork &neuralNetwork) {
+	int &n = neuralNetwork.neuronsNumber;
+	int &L = neuralNetwork.samplesNumber;
+	int currCheckingSampleNumber;
+	int currPer;
+	int numOfSteps = 0;
+
+	double** W;
+	double** Q = neuralNetwork.trainingSamples;
+
+	double* X;
+	double* temp = new double[n];
+	double* state;
+
+	double etaN = ETA / n;
+
+	bool networkTrained;
+	bool currSampleRecognized;
+
+	W = new double*[n];
+	for (int currSampleNumber = 0; currSampleNumber < n; currSampleNumber++) {
+		W[currSampleNumber] = new double[n];
+		memset(W[currSampleNumber], 0, sizeof(double) * n);
+	}
+
+	do {
+		for (int currSampleNumber = 0; currSampleNumber < L; currSampleNumber++) {
+			X = Q[currSampleNumber];
+
+			for (int i = 0; i < n; i++) {
+				temp[i] = X[i];
+
+				for (int j = 0; j < n; j++) {
+					temp[i] -= W[i][j] * X[j];
+				}
+
+				temp[i] *= etaN;
+			}
+
+			for (int i = 0; i < n; i++) {
+				for (int j = 0; j < n; j++) {
+					if (i != j) {
+						W[i][j] += temp[i] * X[j];
+					}
+					else {
+						W[i][j] = 0;
+					}
+				}
+			}
+		}
+
+		for (currCheckingSampleNumber = 0; currCheckingSampleNumber < L; currCheckingSampleNumber++) {
+			X = Q[currCheckingSampleNumber];
+			state = Q[currCheckingSampleNumber];
+
+			currPer = 0;
+			currSampleRecognized = true;
+
+			do {
+				for (int i = 0; i < n; i++) {
+					state[i] = calculateY(calculateS(state, W[i], n), state[i]);
+
+					currSampleRecognized = currSampleRecognized && (state[i] == X[i]);
+				}
+
+				currPer++;
+			} while (currPer != PERIOD && !currSampleRecognized);
+
+			if (!currSampleRecognized) {
+				break;
+			}
+		}
+
+		networkTrained = currCheckingSampleNumber == L;
+
+		//cout << ++numOfSteps << endl;
+	} while (!networkTrained);
+
+	neuralNetwork.currWeightMatrix = W;
+}
+
+
+double* recognizeSample(NeuralNetwork neuralNetwork, double* noisySample) {
+	int n = neuralNetwork.neuronsNumber;
+	
+	double** W = neuralNetwork.currWeightMatrix;
+
+	double* recognizedSample = new double[n];
+
+	double S;
+
+	for (int i = 0; i < n; i++) {
+		S = calculateS(noisySample, W[i], n);
+
+		recognizedSample[i] = calculateY(S, noisySample[i]);
+	}
+
+	return recognizedSample;
+}
+
+
+double calculateS(double* X, double* Wi, int n) {
+	double S = 0;
+
+	for (int j = 0; j < n; j++) {
+		S += X[j] * Wi[j];
+	}
+
+	return S;
+}
+
+
+double calculateY(double S, double prevY) {
+	double y;
+	
+	if (S > 0) {
+		y = 1;
+	}
+	else if (S < 0) {
+		y = -1;
+	}
+	else {
+		y = prevY;
+	}
+
+	return y;
 }
