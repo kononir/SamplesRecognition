@@ -14,6 +14,7 @@ typedef struct NeuralNetwork {
 
 	int neuronsNumber;
 	int samplesNumber;
+	int reachedNumberOfTrainingSteps;
 } NeuralNetwork;
 
 double** readSampleFromFile(std::string filePath, int samplesNumber, int neuronsNumber);

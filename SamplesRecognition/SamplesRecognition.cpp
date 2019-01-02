@@ -6,6 +6,11 @@
 
 using namespace std;
 
+/*
+* author: Novitskiy Vladislav
+* group: 621701
+* description: Главная функция; в ней происходит ввод входных параметров сети и вызываются остальные функции
+*/
 int main()
 {
 	string filePath;
@@ -97,11 +102,18 @@ int main()
 		printSample(recognizedSample, sampleWidth, sampleHeight);
 	}
 
+	cout << "Reached number of training steps: " << neuralNetwork.reachedNumberOfTrainingSteps << endl << endl;
+
 	system("pause");
 	return 0;
 }
 
 
+/*
+* author: Novitskiy Vladislav
+* group: 621701
+* description: Функция чтения образов из файла
+*/
 double** readSampleFromFile(string filePath, int samplesNumber, int neuronsNumber) {
 	double** samples = new double*[samplesNumber];
 	ifstream samplesFile;
@@ -130,6 +142,11 @@ double** readSampleFromFile(string filePath, int samplesNumber, int neuronsNumbe
 }
 
 
+/*
+* author: Novitskiy Vladislav
+* group: 621701
+* description: Функция печати на экран псевдографических образов
+*/
 void printSample(double* sample, int width, int height) {
 	int currComponent = 0;
 
@@ -149,6 +166,11 @@ void printSample(double* sample, int width, int height) {
 }
 
 
+/*
+* author: Novitskiy Vladislav
+* group: 621701
+* description: Функция обучения релаксационной нейронной сети
+*/
 void trainNeuralNetwork(NeuralNetwork &neuralNetwork) {
 	int &n = neuralNetwork.neuronsNumber;
 	int &L = neuralNetwork.samplesNumber;
@@ -224,13 +246,19 @@ void trainNeuralNetwork(NeuralNetwork &neuralNetwork) {
 
 		networkTrained = currCheckingSampleNumber == L;
 
-		//cout << ++numOfSteps << endl;
+		numOfSteps++;
 	} while (!networkTrained);
 
 	neuralNetwork.currWeightMatrix = W;
+	neuralNetwork.reachedNumberOfTrainingSteps = numOfSteps;
 }
 
 
+/*
+* author: Novitskiy Vladislav
+* group: 621701
+* description: Функция распознавания образов
+*/
 double* recognizeSample(NeuralNetwork neuralNetwork, double* noisySample) {
 	int n = neuralNetwork.neuronsNumber;
 	
@@ -250,6 +278,11 @@ double* recognizeSample(NeuralNetwork neuralNetwork, double* noisySample) {
 }
 
 
+/*
+* author: Novitskiy Vladislav
+* group: 621701
+* description: Функция вычисления выхода функции синаптических преобразований нейронов сети 
+*/
 double calculateS(double* X, double* Wi, int n) {
 	double S = 0;
 
@@ -261,6 +294,11 @@ double calculateS(double* X, double* Wi, int n) {
 }
 
 
+/*
+* author: Novitskiy Vladislav
+* group: 621701
+* description: Функция вычисления выхода функции активации нейронов сети
+*/
 double calculateY(double S, double prevY) {
 	double y;
 	
